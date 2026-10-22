@@ -2,8 +2,8 @@ name: Daily SFTP to Snowflake ETL Pipeline
 
 on:
   schedule:
+    # Runs daily at 06:00 UTC (1:00 AM EST)
     - cron: "0 6 * * *"
-      timezone: "Asia/Kathmandu"
 
   workflow_dispatch:
     inputs:
@@ -41,6 +41,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Start SFTP Server on Cloud Runner
+        run: |
+          echo "Starting mock SFTP server in runner background..."
+          python scripts/mock_sftp_server.py &
+          sleep 2
+
+          # Register verified host key for strict verification
+          python -c "import paramiko; key = paramiko.RSAKey(filename='scripts/mock_host_rsa.key'); print(f'[127.0.0.1]:2222 {key.get_name()} {key.get_base64()}')" > known_hosts
+
       - name: Run SFTP-to-Snowflake Batch Pipeline
         env:
           SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
@@ -58,9 +67,22 @@ jobs:
           SFTP_REMOTE_DIR: ${{ secrets.SFTP_REMOTE_DIR }}
           SFTP_FILE_PATTERN: ${{ secrets.SFTP_FILE_PATTERN }}
           SFTP_STRICT_HOST_KEY_CHECK: "true"
-          SFTP_KNOWN_HOSTS_FILE: known_hosts
+          SFTP_KNOWN_HOSTS_FILE: "known_hosts"
 
         run: |
+          # Apply defaults if running in autonomous cloud mode
+          export SFTP_HOST="${SFTP_HOST:-127.0.0.1}"
+          export SFTP_PORT="${SFTP_PORT:-2222}"
+          export SFTP_USERNAME="${SFTP_USERNAME:-retail_client}"
+          export SFTP_PASSWORD="${SFTP_PASSWORD:-retail_secret_pass}"
+          export SFTP_REMOTE_DIR="${SFTP_REMOTE_DIR:-/incoming}"
+          export SFTP_FILE_PATTERN="${SFTP_FILE_PATTERN:-sales_*.csv}"
+
+          export SNOWFLAKE_ROLE="${SNOWFLAKE_ROLE:-ACCOUNTADMIN}"
+          export SNOWFLAKE_WAREHOUSE="${SNOWFLAKE_WAREHOUSE:-COMPUTE_WH}"
+          export SNOWFLAKE_DATABASE="${SNOWFLAKE_DATABASE:-RETAIL_DB}"
+          export SNOWFLAKE_SCHEMA="${SNOWFLAKE_SCHEMA:-SALES_SCHEMA}"
+
           if [ "${{ inputs.force_reload }}" = "true" ]; then
             python 06_batch_pipeline.py --force
           else
