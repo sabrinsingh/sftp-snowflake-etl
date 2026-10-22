@@ -79,6 +79,7 @@ def main():
         assert "CSV_SALES_FORMAT" in formats, "CSV file format not found"
         assert "STG_DAILY_SALES" in stages, "Internal stage not found"
         assert "ETL_LOAD_AUDIT_LOG" in tables, "Audit table not found"
+        assert "DAILY_SALES" in tables, "DAILY_SALES table not found"
 
         print("\nSUCCESS: Snowflake objects created and validated.")
 
