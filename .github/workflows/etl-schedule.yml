@@ -88,3 +88,19 @@ jobs:
           else
             python 06_batch_pipeline.py
           fi
+
+      - name: Send Failure Email Alert
+        if: failure()
+        env:
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          ALERT_RECIPIENT_EMAILS: "sabrinlalsingh@gmail.com"
+        run: |
+          export SMTP_SERVER="${SMTP_SERVER:-smtp.gmail.com}"
+          export SMTP_PORT="${SMTP_PORT:-587}"
+          python scripts/send_alert.py \
+            --subject "🚨 [CRITICAL ALERT] SFTP-to-Snowflake GitHub Workflow Failed" \
+            --body "The scheduled GitHub Actions workflow failed. View run logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --recipient "sabrinlalsingh@gmail.com"

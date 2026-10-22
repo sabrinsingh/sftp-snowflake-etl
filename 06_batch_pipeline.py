@@ -459,6 +459,15 @@ def main():
 
         except Exception as sftp_err:
             print(f"\n❌ SFTP Session or Pipeline Orchestration Failed: {sftp_err}")
+            try:
+                from scripts.send_alert import send_email_alert
+                send_email_alert(
+                    subject="🚨 [CRITICAL ALERT] SFTP Ingestion Orchestration Failed",
+                    body=f"Pipeline failed before batch could complete:\n\nError: {sftp_err}",
+                    recipient="sabrinlalsingh@gmail.com"
+                )
+            except Exception:
+                pass
             sys.exit(1)
 
     # Phase 4: Batch Summary Report
@@ -490,6 +499,28 @@ def main():
 
     if failed_cnt > 0:
         print("\n⚠️ Note: Some files encountered errors, but successful files were safely committed.")
+        try:
+            from scripts.send_alert import send_email_alert
+            failed_files = [r["file"] for r in results if r["status"] == "FAILED"]
+            body_lines = [
+                f"SFTP-to-Snowflake batch pipeline encountered {failed_cnt} failure(s).",
+                f"Timestamp (UTC): {datetime.now(timezone.utc).isoformat()}",
+                f"Failed Files: {', '.join(failed_files)}",
+                "",
+                "Error Details:"
+            ]
+            for r in results:
+                if r["status"] == "FAILED":
+                    body_lines.append(f" - {r['file']}: {r['error']}")
+            body_lines.append("\nPlease review Snowflake table ETL_LOAD_AUDIT_LOG for complete history.")
+
+            send_email_alert(
+                subject=f"🚨 [ETL ALERT] SFTP Ingestion Failure: {failed_cnt} file(s) failed",
+                body="\n".join(body_lines),
+                recipient="sabrinlalsingh@gmail.com"
+            )
+        except Exception as alert_err:
+            print(f"⚠️ Note: Failed to dispatch email alert: {alert_err}")
     else:
         print("\n✅ All batch files processed cleanly!")
 
