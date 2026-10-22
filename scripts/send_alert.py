@@ -27,8 +27,8 @@ def send_email_alert(subject: str, body: str, recipient: str = None) -> bool:
     to_email = recipient or os.getenv("ALERT_RECIPIENT_EMAILS", DEFAULT_RECIPIENT)
     smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
     smtp_port = int(os.getenv("SMTP_PORT", 587))
-    smtp_user = os.getenv("SMTP_USER")
-    smtp_password = os.getenv("SMTP_PASSWORD")
+    smtp_user = (os.getenv("SMTP_USER") or "").strip()
+    smtp_password = (os.getenv("SMTP_PASSWORD") or "").strip()
 
     print(f"\n[ALERT DISPATCH] Preparing email alert to: {to_email}")
     print(f"                 Subject: {subject}")

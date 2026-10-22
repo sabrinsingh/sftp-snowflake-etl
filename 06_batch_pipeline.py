@@ -112,14 +112,14 @@ def parse_copy_result(cursor, result_row):
 # ==============================================================================
 class SFTPClient:
     def __init__(self):
-        self.host = os.getenv("SFTP_HOST")
-        self.port = int(os.getenv("SFTP_PORT", 22))
-        self.user = os.getenv("SFTP_USERNAME")
-        self.password = os.getenv("SFTP_PASSWORD")
-        self.remote_dir = os.getenv("SFTP_REMOTE_DIR", "/incoming")
-        self.pattern = os.getenv("SFTP_FILE_PATTERN", "sales_*.csv")
-        self.strict_host_check = os.getenv("SFTP_STRICT_HOST_KEY_CHECK", "true").lower() == "true"
-        self.known_hosts_file = os.getenv("SFTP_KNOWN_HOSTS_FILE", "known_hosts")
+        self.host = (os.getenv("SFTP_HOST") or "").strip()
+        self.port = int((os.getenv("SFTP_PORT", "22") or "22").strip())
+        self.user = (os.getenv("SFTP_USERNAME") or "").strip()
+        self.password = (os.getenv("SFTP_PASSWORD") or "").strip()
+        self.remote_dir = (os.getenv("SFTP_REMOTE_DIR", "/incoming") or "/incoming").strip()
+        self.pattern = (os.getenv("SFTP_FILE_PATTERN", "sales_*.csv") or "sales_*.csv").strip()
+        self.strict_host_check = (os.getenv("SFTP_STRICT_HOST_KEY_CHECK", "true") or "true").strip().lower() == "true"
+        self.known_hosts_file = (os.getenv("SFTP_KNOWN_HOSTS_FILE", "known_hosts") or "known_hosts").strip()
 
         if not self.host or not self.user or not self.password:
             raise ValueError("Missing required SFTP credentials in .env (SFTP_HOST, SFTP_USERNAME, SFTP_PASSWORD).")
@@ -427,14 +427,22 @@ def main():
 
                 # Phase 2: Connect to Snowflake
                 print("\n--- PHASE 2: Snowflake Batch Connection ---")
+                sf_account = (os.getenv("SNOWFLAKE_ACCOUNT") or "").strip()
+                sf_user = (os.getenv("SNOWFLAKE_USER") or "").strip()
+                sf_pass = (os.getenv("SNOWFLAKE_PASSWORD") or "").strip()
+                sf_role = (os.getenv("SNOWFLAKE_ROLE", "ACCOUNTADMIN") or "ACCOUNTADMIN").strip()
+                sf_wh = (os.getenv("SNOWFLAKE_WAREHOUSE", "COMPUTE_WH") or "COMPUTE_WH").strip()
+                sf_db = (os.getenv("SNOWFLAKE_DATABASE", "RETAIL_DB") or "RETAIL_DB").strip()
+                sf_schema = (os.getenv("SNOWFLAKE_SCHEMA", "SALES_SCHEMA") or "SALES_SCHEMA").strip()
+
                 conn = snowflake.connector.connect(
-                    account=os.getenv("SNOWFLAKE_ACCOUNT"),
-                    user=os.getenv("SNOWFLAKE_USER"),
-                    password=os.getenv("SNOWFLAKE_PASSWORD"),
-                    role=os.getenv("SNOWFLAKE_ROLE", "ACCOUNTADMIN"),
-                    warehouse=os.getenv("SNOWFLAKE_WAREHOUSE", "COMPUTE_WH"),
-                    database="RETAIL_DB",
-                    schema="SALES_SCHEMA",
+                    account=sf_account,
+                    user=sf_user,
+                    password=sf_pass,
+                    role=sf_role,
+                    warehouse=sf_wh,
+                    database=sf_db,
+                    schema=sf_schema,
                     autocommit=False
                 )
                 cursor = conn.cursor()

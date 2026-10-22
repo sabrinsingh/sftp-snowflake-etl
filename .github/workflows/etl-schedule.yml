@@ -60,8 +60,27 @@ jobs:
           SFTP_STRICT_HOST_KEY_CHECK: "true"
           SFTP_KNOWN_HOSTS_FILE: "known_hosts"
 
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          ALERT_RECIPIENT_EMAILS: "sabrinlalsingh@gmail.com"
+
         run: |
-          # 1. Start runner-hosted mock SFTP service if SFTP_HOST is not configured
+          # 1. Sanitize Snowflake & SFTP environment variables (strip newlines/carriage returns)
+          export SNOWFLAKE_ACCOUNT=$(printf '%s' "$SNOWFLAKE_ACCOUNT" | tr -d '\r\n ')
+          export SNOWFLAKE_USER=$(printf '%s' "$SNOWFLAKE_USER" | tr -d '\r\n ')
+          export SNOWFLAKE_PASSWORD=$(printf '%s' "$SNOWFLAKE_PASSWORD" | tr -d '\r\n')
+          export SNOWFLAKE_ROLE=$(printf '%s' "${SNOWFLAKE_ROLE:-ACCOUNTADMIN}" | tr -d '\r\n ')
+          export SNOWFLAKE_WAREHOUSE=$(printf '%s' "${SNOWFLAKE_WAREHOUSE:-COMPUTE_WH}" | tr -d '\r\n ')
+          export SNOWFLAKE_DATABASE=$(printf '%s' "${SNOWFLAKE_DATABASE:-RETAIL_DB}" | tr -d '\r\n ')
+          export SNOWFLAKE_SCHEMA=$(printf '%s' "${SNOWFLAKE_SCHEMA:-SALES_SCHEMA}" | tr -d '\r\n ')
+
+          if [ -n "$SFTP_HOST" ]; then
+            export SFTP_HOST=$(printf '%s' "$SFTP_HOST" | tr -d '\r\n ')
+          fi
+
+          # 2. Start runner-hosted mock SFTP service if SFTP_HOST is not configured
           if [ -z "$SFTP_HOST" ] || [ "$SFTP_HOST" = "127.0.0.1" ]; then
             echo "Starting mock SFTP server in runner background..."
             export SFTP_HOST="127.0.0.1"
@@ -80,12 +99,6 @@ jobs:
             # Register verified server key in runner known_hosts
             python -c "import paramiko; key = paramiko.RSAKey(filename='scripts/mock_host_rsa.key'); print(f'[127.0.0.1]:2222 {key.get_name()} {key.get_base64()}')" > known_hosts
           fi
-
-          # 2. Set Snowflake defaults if optional secrets are omitted
-          export SNOWFLAKE_ROLE="${SNOWFLAKE_ROLE:-ACCOUNTADMIN}"
-          export SNOWFLAKE_WAREHOUSE="${SNOWFLAKE_WAREHOUSE:-COMPUTE_WH}"
-          export SNOWFLAKE_DATABASE="${SNOWFLAKE_DATABASE:-RETAIL_DB}"
-          export SNOWFLAKE_SCHEMA="${SNOWFLAKE_SCHEMA:-SALES_SCHEMA}"
 
           # 3. Check for required Snowflake credentials
           if [ -z "$SNOWFLAKE_ACCOUNT" ] || [ -z "$SNOWFLAKE_USER" ] || [ -z "$SNOWFLAKE_PASSWORD" ]; then
