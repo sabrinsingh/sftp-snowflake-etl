@@ -1,0 +1,22 @@
+# Secrets & Credentials
+.env
+.env.*
+!.env.example
+known_hosts
+*.pem
+*.key
+*.id_rsa
+
+# Logs & Temporary files
+*.log
+tmp/
+sftp_root/incoming/temp_*
+
+# Python & Environment
+__pycache__/
+*.py[cod]
+.venv/
+env/
+
+# OS Specific
+.DS_Store

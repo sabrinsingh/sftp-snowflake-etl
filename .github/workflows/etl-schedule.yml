@@ -1,0 +1,61 @@
+name: Daily SFTP to Snowflake ETL Pipeline
+
+on:
+  schedule:
+    # Runs daily at 06:00 UTC (1:00 AM EST)
+    - cron: '0 6 * * *'
+  # Allows manual triggering from the GitHub Actions tab
+  workflow_dispatch:
+    inputs:
+      force_reload:
+        description: 'Force reload previously ingested files'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  ingest-sales-data:
+    name: Run Batch SFTP Ingestion
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run SFTP-to-Snowflake Batch Pipeline
+        env:
+          # Snowflake Configuration
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE || 'ACCOUNTADMIN' }}
+          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE || 'COMPUTE_WH' }}
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE || 'RETAIL_DB' }}
+          SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA || 'SALES_SCHEMA' }}
+
+          # SFTP Server Configuration
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_PORT: ${{ secrets.SFTP_PORT || 22 }}
+          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+          SFTP_REMOTE_DIR: ${{ secrets.SFTP_REMOTE_DIR || '/incoming' }}
+          SFTP_FILE_PATTERN: ${{ secrets.SFTP_FILE_PATTERN || 'sales_*.csv' }}
+          SFTP_STRICT_HOST_KEY_CHECK: ${{ secrets.SFTP_STRICT_HOST_KEY_CHECK || 'true' }}
+          SFTP_KNOWN_HOSTS_FILE: ${{ secrets.SFTP_KNOWN_HOSTS_FILE || 'known_hosts' }}
+        run: |
+          if [ "${{ inputs.force_reload }}" = "true" ]; then
+            python 06_batch_pipeline.py --force
+          else
+            python 06_batch_pipeline.py
+          fi
