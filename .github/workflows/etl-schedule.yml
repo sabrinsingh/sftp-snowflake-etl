@@ -2,21 +2,29 @@ name: Daily SFTP to Snowflake ETL Pipeline
 
 on:
   schedule:
-    # Runs daily at 06:00 UTC (1:00 AM EST)
-    - cron: '0 6 * * *'
-  # Allows manual triggering from the GitHub Actions tab
+    - cron: "0 6 * * *"
+      timezone: "Asia/Kathmandu"
+
   workflow_dispatch:
     inputs:
       force_reload:
-        description: 'Force reload previously ingested files'
+        description: "Force reload previously ingested files"
         required: false
         type: boolean
         default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-sftp-snowflake-etl
+  cancel-in-progress: false
 
 jobs:
   ingest-sales-data:
     name: Run Batch SFTP Ingestion
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Check out repository code
@@ -25,8 +33,8 @@ jobs:
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-          cache: 'pip'
+          python-version: "3.12"
+          cache: pip
 
       - name: Install dependencies
         run: |
@@ -42,39 +50,17 @@ jobs:
           SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
           SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
           SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+
           SFTP_HOST: ${{ secrets.SFTP_HOST }}
           SFTP_PORT: ${{ secrets.SFTP_PORT }}
           SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
           SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
           SFTP_REMOTE_DIR: ${{ secrets.SFTP_REMOTE_DIR }}
           SFTP_FILE_PATTERN: ${{ secrets.SFTP_FILE_PATTERN }}
-          SFTP_STRICT_HOST_KEY_CHECK: ${{ secrets.SFTP_STRICT_HOST_KEY_CHECK }}
+          SFTP_STRICT_HOST_KEY_CHECK: "true"
+          SFTP_KNOWN_HOSTS_FILE: known_hosts
+
         run: |
-          # If SFTP_HOST secret is not configured, fall back to runner-hosted mock SFTP service
-          if [ -z "$SFTP_HOST" ] || [ "$SFTP_HOST" = "127.0.0.1" ]; then
-            echo "SFTP_HOST not configured in GitHub Secrets. Starting runner mock SFTP server..."
-            export SFTP_HOST="127.0.0.1"
-            export SFTP_PORT="2222"
-            export SFTP_USERNAME="retail_client"
-            export SFTP_PASSWORD="retail_secret_pass"
-            export SFTP_REMOTE_DIR="/incoming"
-            export SFTP_FILE_PATTERN="sales_*.csv"
-            export SFTP_STRICT_HOST_KEY_CHECK="true"
-            export SFTP_KNOWN_HOSTS_FILE="known_hosts"
-
-            python scripts/mock_sftp_server.py &
-            sleep 2
-
-            # Register verified server key in runner known_hosts
-            python -c "import paramiko; key = paramiko.RSAKey(filename='scripts/mock_host_rsa.key'); print(f'[127.0.0.1]:2222 {key.get_name()} {key.get_base64()}')" > known_hosts
-          fi
-
-          # Set Snowflake defaults if optional secrets omitted
-          export SNOWFLAKE_ROLE="${SNOWFLAKE_ROLE:-ACCOUNTADMIN}"
-          export SNOWFLAKE_WAREHOUSE="${SNOWFLAKE_WAREHOUSE:-COMPUTE_WH}"
-          export SNOWFLAKE_DATABASE="${SNOWFLAKE_DATABASE:-RETAIL_DB}"
-          export SNOWFLAKE_SCHEMA="${SNOWFLAKE_SCHEMA:-SALES_SCHEMA}"
-
           if [ "${{ inputs.force_reload }}" = "true" ]; then
             python 06_batch_pipeline.py --force
           else
