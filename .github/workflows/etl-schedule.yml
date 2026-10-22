@@ -33,37 +33,48 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Start Background SFTP Service (for Cloud Testing / CI)
-        # If SFTP_HOST is not provided, start runner-hosted mock SFTP server
-        if: ${{ secrets.SFTP_HOST == '' || secrets.SFTP_HOST == '127.0.0.1' }}
-        run: |
-          echo "Starting mock SFTP server in runner background..."
-          python scripts/mock_sftp_server.py &
-          sleep 2
-          # Ensure verified host key is registered for strict check
-          python -c "import paramiko; key = paramiko.RSAKey(filename='scripts/mock_host_rsa.key'); print(f'[127.0.0.1]:2222 {key.get_name()} {key.get_base64()}')" > known_hosts
-
       - name: Run SFTP-to-Snowflake Batch Pipeline
         env:
-          # Snowflake Configuration
           SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
           SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
           SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
-          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE || 'ACCOUNTADMIN' }}
-          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE || 'COMPUTE_WH' }}
-          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE || 'RETAIL_DB' }}
-          SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA || 'SALES_SCHEMA' }}
-
-          # SFTP Server Configuration (defaults to runner mock if secrets empty)
-          SFTP_HOST: ${{ secrets.SFTP_HOST || '127.0.0.1' }}
-          SFTP_PORT: ${{ secrets.SFTP_PORT || '2222' }}
-          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME || 'retail_client' }}
-          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD || 'retail_secret_pass' }}
-          SFTP_REMOTE_DIR: ${{ secrets.SFTP_REMOTE_DIR || '/incoming' }}
-          SFTP_FILE_PATTERN: ${{ secrets.SFTP_FILE_PATTERN || 'sales_*.csv' }}
-          SFTP_STRICT_HOST_KEY_CHECK: ${{ secrets.SFTP_STRICT_HOST_KEY_CHECK || 'true' }}
-          SFTP_KNOWN_HOSTS_FILE: 'known_hosts'
+          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_PORT: ${{ secrets.SFTP_PORT }}
+          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
+          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+          SFTP_REMOTE_DIR: ${{ secrets.SFTP_REMOTE_DIR }}
+          SFTP_FILE_PATTERN: ${{ secrets.SFTP_FILE_PATTERN }}
+          SFTP_STRICT_HOST_KEY_CHECK: ${{ secrets.SFTP_STRICT_HOST_KEY_CHECK }}
         run: |
+          # If SFTP_HOST secret is not configured, fall back to runner-hosted mock SFTP service
+          if [ -z "$SFTP_HOST" ] || [ "$SFTP_HOST" = "127.0.0.1" ]; then
+            echo "SFTP_HOST not configured in GitHub Secrets. Starting runner mock SFTP server..."
+            export SFTP_HOST="127.0.0.1"
+            export SFTP_PORT="2222"
+            export SFTP_USERNAME="retail_client"
+            export SFTP_PASSWORD="retail_secret_pass"
+            export SFTP_REMOTE_DIR="/incoming"
+            export SFTP_FILE_PATTERN="sales_*.csv"
+            export SFTP_STRICT_HOST_KEY_CHECK="true"
+            export SFTP_KNOWN_HOSTS_FILE="known_hosts"
+
+            python scripts/mock_sftp_server.py &
+            sleep 2
+
+            # Register verified server key in runner known_hosts
+            python -c "import paramiko; key = paramiko.RSAKey(filename='scripts/mock_host_rsa.key'); print(f'[127.0.0.1]:2222 {key.get_name()} {key.get_base64()}')" > known_hosts
+          fi
+
+          # Set Snowflake defaults if optional secrets omitted
+          export SNOWFLAKE_ROLE="${SNOWFLAKE_ROLE:-ACCOUNTADMIN}"
+          export SNOWFLAKE_WAREHOUSE="${SNOWFLAKE_WAREHOUSE:-COMPUTE_WH}"
+          export SNOWFLAKE_DATABASE="${SNOWFLAKE_DATABASE:-RETAIL_DB}"
+          export SNOWFLAKE_SCHEMA="${SNOWFLAKE_SCHEMA:-SALES_SCHEMA}"
+
           if [ "${{ inputs.force_reload }}" = "true" ]; then
             python 06_batch_pipeline.py --force
           else
