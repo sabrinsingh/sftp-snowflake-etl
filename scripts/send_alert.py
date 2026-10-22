@@ -45,11 +45,12 @@ def send_email_alert(subject: str, body: str, recipient: str = None) -> bool:
         msg["Subject"] = subject
         msg.attach(MIMEText(body, "plain"))
 
+        clean_password = smtp_password.replace(" ", "")
         with smtplib.SMTP(smtp_server, smtp_port, timeout=15) as server:
             server.ehlo()
             server.starttls()
             server.ehlo()
-            server.login(smtp_user, smtp_password)
+            server.login(smtp_user, clean_password)
             server.send_message(msg)
 
         print(f"   ✓ Alert email successfully sent to {to_email}!")
